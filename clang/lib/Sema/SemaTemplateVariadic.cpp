@@ -1097,6 +1097,9 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
       } else if (isComputedNoexcept(Chunk.Fun.getExceptionSpecType()) &&
                  Chunk.Fun.NoexceptExpr->containsUnexpandedParameterPack())
         return true;
+      else if (isComputedThrows(Chunk.Fun.getExceptionSpecType()) &&
+               Chunk.Fun.ThrowsExpr->containsUnexpandedParameterPack())
+        return true;
 
       if (Chunk.Fun.hasTrailingReturnType()) {
         QualType T = Chunk.Fun.getTrailingReturnType().get();

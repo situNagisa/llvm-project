@@ -172,6 +172,7 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
                                              SourceRange *ExceptionRanges,
                                              unsigned NumExceptions,
                                              Expr *NoexceptExpr,
+                                             Expr *ThrowsExpr,
                                              CachedTokens *ExceptionSpecTokens,
                                              ArrayRef<NamedDecl*>
                                                  DeclsInPrototype,
@@ -208,6 +209,7 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
   I.Fun.NumExceptionsOrDecls    = 0;
   I.Fun.Exceptions              = nullptr;
   I.Fun.NoexceptExpr            = nullptr;
+  I.Fun.ThrowsExpr              = nullptr;
   I.Fun.HasTrailingReturnType   = TrailingReturnType.isUsable() ||
                                   TrailingReturnType.isInvalid();
   I.Fun.TrailingReturnType      = TrailingReturnType.get();
@@ -269,7 +271,13 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
   case EST_NoexceptTrue:
     I.Fun.NoexceptExpr = NoexceptExpr;
     break;
-
+  case EST_BasicThrows:
+  case EST_DependentThrows:
+  case EST_ThrowsFalse:
+  case EST_ThrowsTrue:
+  case EST_ThrowsDynamic:
+    I.Fun.ThrowsExpr = ThrowsExpr;
+    break;
   case EST_Unparsed:
     I.Fun.ExceptionSpecTokens = ExceptionSpecTokens;
     break;

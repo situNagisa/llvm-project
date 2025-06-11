@@ -2900,7 +2900,18 @@ private:
       bool Delayed, SourceRange &SpecificationRange,
       SmallVectorImpl<ParsedType> &DynamicExceptions,
       SmallVectorImpl<SourceRange> &DynamicExceptionRanges,
-      ExprResult &NoexceptExpr, CachedTokens *&ExceptionSpecTokens);
+      ExprResult &NoexceptExpr, 
+      ExprResult &ThrowsExpr,
+      CachedTokens *&ExceptionSpecTokens);
+
+  ExceptionSpecificationType ParseThrowsSpecification(
+      SourceRange &SpecificationRange,
+      ExprResult &StaticExceptionExpr);
+
+  //
+  ExceptionSpecificationType
+  ParseNoexceptSpecification(SourceRange &SpecificationRange,
+                             ExprResult &NoexceptExpr);
 
   /// ParseDynamicExceptionSpecification - Parse a C++
   /// dynamic-exception-specification (C++ [except.spec]).

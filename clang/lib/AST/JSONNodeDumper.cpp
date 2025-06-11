@@ -656,6 +656,21 @@ void JSONNodeDumper::VisitFunctionProtoType(const FunctionProtoType *T) {
     //JOS.attributeWithCall("exceptionSpecExpr",
     //                    [this, E]() { Visit(E.ExceptionSpec.NoexceptExpr); });
     break;
+  case EST_BasicThrows:
+    JOS.attribute("exceptionSpec", "throws");
+    break;
+  case EST_ThrowsFalse:
+    JOS.attribute("exceptionSpec", "throws");
+    JOS.attribute("conditionEvaluatesTo", 0);
+    break;
+  case EST_ThrowsTrue:
+    JOS.attribute("exceptionSpec", "throws");
+    JOS.attribute("conditionEvaluatesTo", 1);
+    break;
+  case EST_ThrowsDynamic:
+    JOS.attribute("exceptionSpec", "throws");
+    JOS.attribute("conditionEvaluatesTo", 2);
+    break;
   case EST_NoThrow:
     JOS.attribute("exceptionSpec", "nothrow");
     break;
@@ -663,6 +678,7 @@ void JSONNodeDumper::VisitFunctionProtoType(const FunctionProtoType *T) {
   // suspect you can only run into them when executing an AST dump from within
   // the debugger, which is not a use case we worry about for the JSON dumping
   // feature.
+  case EST_DependentThrows:
   case EST_DependentNoexcept:
   case EST_Unevaluated:
   case EST_Uninstantiated:

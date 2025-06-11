@@ -1442,6 +1442,10 @@ struct DeclaratorChunk {
       /// function, if it has one.
       Expr *NoexceptExpr;
 
+      /// Pointer to the expression in the throws-specifier of this
+      /// function, if it has one.
+      Expr *ThrowsExpr;
+
       /// Pointer to the cached tokens for an exception-specification
       /// that has not yet been parsed.
       CachedTokens *ExceptionSpecTokens;
@@ -1725,6 +1729,7 @@ struct DeclaratorChunk {
                                      SourceRange *ExceptionRanges,
                                      unsigned NumExceptions,
                                      Expr *NoexceptExpr,
+                                     Expr *ThrowsExpr,
                                      CachedTokens *ExceptionSpecTokens,
                                      ArrayRef<NamedDecl *> DeclsInPrototype,
                                      SourceLocation LocalRangeBegin,

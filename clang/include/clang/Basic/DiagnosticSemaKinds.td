@@ -1944,6 +1944,9 @@ def ext_using_undefined_std : ExtWarn<
   "using directive refers to implicitly-defined namespace 'std'">;
 
 // C++ exception specifications
+def err_throws_expression_value_out_of_range : Error<
+  "invalid throws expression value %0; expected one of: no_except"
+  ", static_except, or dynamic_except (see ::std::except_t)">;
 def err_exception_spec_in_typedef : Error<
   "exception specifications are not allowed in %select{typedefs|type aliases}0">;
 def err_distant_exception_spec : Error<

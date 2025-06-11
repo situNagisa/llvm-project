@@ -800,6 +800,7 @@ static void maybeSynthesizeBlockSignature(TypeProcessingState &state,
       /*ExceptionRanges=*/nullptr,
       /*NumExceptions=*/0,
       /*NoexceptExpr=*/nullptr,
+      /*ThrowsExpr=*/nullptr,
       /*ExceptionSpecTokens=*/nullptr,
       /*DeclsInPrototype=*/{}, loc, loc, declarator));
 
@@ -5289,6 +5290,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         SmallVector<ParsedType, 2> DynamicExceptions;
         SmallVector<SourceRange, 2> DynamicExceptionRanges;
         Expr *NoexceptExpr = nullptr;
+        Expr *ThrowsExpr = nullptr;
 
         if (FTI.getExceptionSpecType() == EST_Dynamic) {
           // FIXME: It's rather inefficient to have to split into two vectors
@@ -5302,6 +5304,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
           }
         } else if (isComputedNoexcept(FTI.getExceptionSpecType())) {
           NoexceptExpr = FTI.NoexceptExpr;
+        } else if (isComputedThrows(FTI.getExceptionSpecType())) {
+          ThrowsExpr = FTI.ThrowsExpr;
         }
 
         S.checkExceptionSpecification(D.isFunctionDeclarationContext(),
@@ -5309,6 +5313,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                                       DynamicExceptions,
                                       DynamicExceptionRanges,
                                       NoexceptExpr,
+                                      ThrowsExpr,
                                       Exceptions,
                                       EPI.ExceptionSpec);
 
@@ -8035,15 +8040,20 @@ static bool handleFunctionTypeAttr(TypeProcessingState &state, ParsedAttr &attr,
       case EST_BasicNoexcept:
       case EST_NoexceptTrue:
       case EST_NoThrow:
+      case EST_ThrowsFalse:
         // Exception spec doesn't conflict with nothrow, so don't warn.
         [[fallthrough]];
       case EST_Unparsed:
       case EST_Uninstantiated:
       case EST_DependentNoexcept:
+      case EST_DependentThrows:
       case EST_Unevaluated:
         // We don't have enough information to properly determine if there is a
         // conflict, so suppress the warning.
         break;
+      case EST_BasicThrows:
+      case EST_ThrowsTrue:
+      case EST_ThrowsDynamic:
       case EST_Dynamic:
       case EST_MSAny:
       case EST_NoexceptFalse:

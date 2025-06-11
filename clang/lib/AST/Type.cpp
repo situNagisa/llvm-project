@@ -3737,6 +3737,19 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
         toTypeDependence(epi.ExceptionSpec.NoexceptExpr->getDependence()) &
         (TypeDependence::Instantiation | TypeDependence::UnexpandedPack));
   }
+  // Fill in the Expr * in the exception specification if present.
+  else if (isComputedThrows(getExceptionSpecType())) {
+    assert(epi.ExceptionSpec.ThrowsExpr && "computed throws with no expr");
+    assert((getExceptionSpecType() == EST_DependentThrows) ==
+           epi.ExceptionSpec.ThrowsExpr->isValueDependent());
+
+    // Store the noexcept expression and context.
+    *getTrailingObjects<Expr *>() = epi.ExceptionSpec.ThrowsExpr;
+
+    addDependence(
+        toTypeDependence(epi.ExceptionSpec.ThrowsExpr->getDependence()) &
+        (TypeDependence::Instantiation | TypeDependence::UnexpandedPack));
+  }
   // Fill in the FunctionDecl * in the exception specification if present.
   else if (getExceptionSpecType() == EST_Uninstantiated) {
     // Store the function decl from which we will resolve our
@@ -3757,7 +3770,8 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
   // then it's a dependent type. This only happens in C++17 onwards.
   if (isCanonicalUnqualified()) {
     if (getExceptionSpecType() == EST_Dynamic ||
-        getExceptionSpecType() == EST_DependentNoexcept) {
+        getExceptionSpecType() == EST_DependentNoexcept ||
+        getExceptionSpecType() == EST_DependentThrows) {
       assert(hasDependentExceptionSpec() && "type should not be canonical");
       addDependence(TypeDependence::DependentInstantiation);
     }
@@ -3846,8 +3860,12 @@ CanThrowResult FunctionProtoType::canThrow() const {
   case EST_BasicNoexcept:
   case EST_NoexceptTrue:
   case EST_NoThrow:
+  case EST_ThrowsFalse:
+  case EST_ThrowsTrue:
+  case EST_BasicThrows:
     return CT_Cannot;
 
+  case EST_ThrowsDynamic:
   case EST_None:
   case EST_MSAny:
   case EST_NoexceptFalse:
@@ -3863,6 +3881,7 @@ CanThrowResult FunctionProtoType::canThrow() const {
 
   case EST_Uninstantiated:
   case EST_DependentNoexcept:
+  case EST_DependentThrows:
     return CT_Dependent;
   }
 
@@ -3909,7 +3928,7 @@ void FunctionProtoType::Profile(llvm::FoldingSetNodeID &ID, QualType Result,
   // shortcut, use one AddInteger call instead of four for the next four
   // fields.
   assert(!(unsigned(epi.Variadic) & ~1) && !(unsigned(epi.RefQualifier) & ~3) &&
-         !(unsigned(epi.ExceptionSpec.Type) & ~15) &&
+         !(unsigned(epi.ExceptionSpec.Type) & ~31) &&
          "Values larger than expected.");
   ID.AddInteger(unsigned(epi.Variadic) + (epi.RefQualifier << 1) +
                 (epi.ExceptionSpec.Type << 3));
@@ -3919,6 +3938,8 @@ void FunctionProtoType::Profile(llvm::FoldingSetNodeID &ID, QualType Result,
       ID.AddPointer(Ex.getAsOpaquePtr());
   } else if (isComputedNoexcept(epi.ExceptionSpec.Type)) {
     epi.ExceptionSpec.NoexceptExpr->Profile(ID, Context, Canonical);
+  } else if (isComputedThrows(epi.ExceptionSpec.Type)) {
+    epi.ExceptionSpec.ThrowsExpr->Profile(ID, Context, Canonical);
   } else if (epi.ExceptionSpec.Type == EST_Uninstantiated ||
              epi.ExceptionSpec.Type == EST_Unevaluated) {
     ID.AddPointer(epi.ExceptionSpec.SourceDecl->getCanonicalDecl());

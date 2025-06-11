@@ -114,6 +114,61 @@ ExprResult Sema::ActOnNoexceptSpec(Expr *NoexceptExpr,
   return Converted;
 }
 
+ExprResult Sema::ActOnThrowsSpec(SourceLocation ExpressionLoc,
+                                 Expr *ThrowsExpr,
+                                 ExceptionSpecificationType &EST) {
+
+  if (ThrowsExpr->isTypeDependent() ||
+      ThrowsExpr->containsUnexpandedParameterPack()) {
+    EST = EST_DependentThrows;
+    return ThrowsExpr;
+  }
+
+  llvm::APSInt Result;
+  ExprResult Converted = CheckConvertedConstantExpression(
+      ThrowsExpr, Context.IntTy, Result, CCEKind::Throws);
+
+  if (Converted.isInvalid()) {
+    EST = EST_ThrowsFalse;
+    // Fill in an expression of 'false' as a fixup.
+    auto *IntExpr = new (Context) IntegerLiteral(
+        Context, llvm::APSInt::get(0), Context.IntTy, ThrowsExpr->getBeginLoc());
+    llvm::APSInt Value{2};
+    Value = 0;
+    return ConstantExpr::Create(Context, IntExpr, APValue{Value});
+  }
+  if (Result < 0 || Result > 2)
+  {
+    EST = EST_ThrowsFalse;
+    Diag(ExpressionLoc, diag::err_throws_expression_value_out_of_range)
+        << Result.getExtValue();
+    auto *IntExpr = new (Context) IntegerLiteral(
+        Context,
+        llvm::APSInt(llvm::APInt(Context.getIntWidth(Context.IntTy), 0), false), 
+                                     Context.IntTy, ThrowsExpr->getBeginLoc());
+    llvm::APSInt Value{2};
+    Value = 0;
+    return ConstantExpr::Create(Context, IntExpr, APValue{Value});
+  }
+
+  if (Converted.get()->isValueDependent()) {
+    EST = EST_DependentThrows;
+    return Converted;
+  }
+
+  if (!Converted.isInvalid()) {
+    if (Result == 0)
+      EST = EST_ThrowsFalse;
+    else if (Result == 1)
+      EST = EST_ThrowsTrue;
+    else if (Result == 2)
+      EST = EST_ThrowsDynamic;
+    else
+      llvm_unreachable("Unexpected result from throws specifier check");
+  }
+  return Converted;
+}
+
 bool Sema::CheckSpecifiedExceptionType(QualType &T, SourceRange Range) {
   // C++11 [except.spec]p2:
   //   A type cv T, "array of T", or "function returning T" denoted
@@ -378,9 +433,16 @@ bool Sema::CheckEquivalentExceptionSpec(FunctionDecl *Old, FunctionDecl *New) {
   if (ESI.Type == EST_NoexceptTrue)
     ESI.Type = EST_BasicNoexcept;
 
+  if (ESI.Type == EST_ThrowsFalse)
+    ESI.Type = EST_BasicNoexcept;
+  if (ESI.Type == EST_ThrowsTrue)
+    ESI.Type = EST_BasicThrows;
+  if (ESI.Type == EST_ThrowsDynamic)
+    ESI.Type = EST_None;
+
   // For dependent noexcept, we can't just take the expression from the old
   // prototype. It likely contains references to the old prototype's parameters.
-  if (ESI.Type == EST_DependentNoexcept) {
+  if (ESI.Type == EST_DependentNoexcept || ESI.Type == EST_DependentThrows) {
     New->setInvalidDecl();
   } else {
     // Update the type of the function with the appropriate exception
@@ -394,7 +456,7 @@ bool Sema::CheckEquivalentExceptionSpec(FunctionDecl *Old, FunctionDecl *New) {
     DiagID = diag::ext_missing_exception_specification;
     ReturnValueOnError = false;
   } else if (New->isReplaceableGlobalAllocationFunction() &&
-             ESI.Type != EST_DependentNoexcept) {
+             ESI.Type != EST_DependentNoexcept && ESI.Type != EST_DependentThrows) {
     // Allow missing exception specifications in redeclarations as an extension,
     // when declaring a replaceable global allocation function.
     DiagID = diag::ext_missing_exception_specification;
@@ -448,6 +510,20 @@ bool Sema::CheckEquivalentExceptionSpec(FunctionDecl *Old, FunctionDecl *New) {
     OldProto->getNoexceptExpr()->printPretty(OS, nullptr, getPrintingPolicy());
     OS << ")";
     break;
+
+  case EST_BasicThrows:
+    OS << "throws";
+    break;
+  case EST_DependentThrows:
+  case EST_ThrowsFalse:
+  case EST_ThrowsTrue:
+  case EST_ThrowsDynamic:
+    OS << "throws(";
+    assert(OldProto->getNoexceptExpr() != nullptr && "Expected non-null Expr");
+    OldProto->getNoexceptExpr()->printPretty(OS, nullptr, getPrintingPolicy());
+    OS << ")";
+    break;
+
   case EST_NoThrow:
     OS <<"__attribute__((nothrow))";
     break;

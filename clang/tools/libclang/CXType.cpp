@@ -811,12 +811,19 @@ getExternalExceptionSpecificationKind(ExceptionSpecificationType EST) {
     return CXCursor_ExceptionSpecificationKind_MSAny;
   case EST_BasicNoexcept:
     return CXCursor_ExceptionSpecificationKind_BasicNoexcept;
+  case EST_BasicThrows:
+    return CXCursor_ExceptionSpecificationKind_BasicThrows;
   case EST_NoThrow:
     return CXCursor_ExceptionSpecificationKind_NoThrow;
   case EST_NoexceptFalse:
   case EST_NoexceptTrue:
   case EST_DependentNoexcept:
     return CXCursor_ExceptionSpecificationKind_ComputedNoexcept;
+  case EST_ThrowsDynamic:
+  case EST_ThrowsFalse:
+  case EST_ThrowsTrue:
+  case EST_DependentThrows:
+    return CXCursor_ExceptionSpecificationKind_ComputedThrows;
   case EST_Unevaluated:
     return CXCursor_ExceptionSpecificationKind_Unevaluated;
   case EST_Uninstantiated:

@@ -208,6 +208,16 @@ enum CXCursor_ExceptionSpecificationKind {
   CXCursor_ExceptionSpecificationKind_ComputedNoexcept,
 
   /**
+   * The cursor has exception specification basic throws.
+   */
+  CXCursor_ExceptionSpecificationKind_BasicThrows,
+
+  /**
+   * The cursor has exception specification computed throws.
+   */
+  CXCursor_ExceptionSpecificationKind_ComputedThrows,
+
+  /**
    * The exception specification has not yet been evaluated.
    */
   CXCursor_ExceptionSpecificationKind_Unevaluated,
