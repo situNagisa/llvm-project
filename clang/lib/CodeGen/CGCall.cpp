@@ -243,9 +243,10 @@ arrangeLLVMFunctionInfo(CodeGenTypes &CGT, bool instanceMethod,
   RequiredArgs Required = RequiredArgs::forPrototypePlus(FTP, prefix.size());
   appendParameterTypes(CGT, prefix, paramInfos, FTP);
   CanQualType resultType = FTP->getReturnType().getUnqualifiedType();
-
   FnInfoOpts opts =
       instanceMethod ? FnInfoOpts::IsInstanceMethod : FnInfoOpts::None;
+  if (::isThrowsExceptionSpec(FTP->getTypePtr()->getExceptionSpecType()))
+    opts = opts | FnInfoOpts::IsStaticExceptionSpecification;
   return CGT.arrangeLLVMFunctionInfo(resultType, opts, prefix,
                                      FTP->getExtInfo(), paramInfos, Required);
 }
@@ -834,6 +835,62 @@ void computeSPIRKernelABIInfo(CodeGenModule &CGM, CGFunctionInfo &FI);
 }
 } // namespace clang
 
+
+static auto
+generateStaticExceptionSpecificationResultType(CodeGenTypes &CGT,
+                                               CanQualType ResultType) {
+  auto &ast = CGT.getContext();
+  /// struct {
+  ///   bool flag;
+  ///   union {
+  ///     ::std::error error;
+  ///     T result;
+  ///   };
+  /// }
+  auto struct_ = CXXRecordDecl::Create(
+      ast, TagTypeKind::Struct, ast.getTranslationUnitDecl(), {}, {}, nullptr);
+  struct_->startDefinition();
+  struct_->setAccess(AS_public);
+  auto flag =
+      FieldDecl::Create(ast, struct_, {}, {}, &ast.Idents.get("flag"),
+                        ast.BoolTy, nullptr, nullptr, false, ICIS_NoInit);
+  flag->setAccess(AS_public);
+  struct_->addDecl(flag);
+
+  auto union_ =
+      CXXRecordDecl::Create(ast, TagTypeKind::Union, struct_, {}, {}, nullptr);
+  union_->startDefinition();
+  union_->setAccess(AS_public);
+  auto error_type = ast.VoidPtrTy;
+  auto error =
+      FieldDecl::Create(ast, union_, {}, {}, &ast.Idents.get("error"),
+                        error_type, nullptr, nullptr, false, ICIS_NoInit);
+  error->setAccess(AS_public);
+  union_->addDecl(error);
+  if (!ResultType->isVoidType()) {
+    auto result =
+        FieldDecl::Create(ast, union_, {}, {}, &ast.Idents.get("result"),
+                          ResultType, nullptr, nullptr, false, ICIS_NoInit);
+    result->setAccess(AS_public);
+    union_->addDecl(result);
+  }
+  union_->completeDefinition();
+  auto union_field = FieldDecl::Create(ast, struct_, {}, {}, nullptr,
+                                       ast.getRecordType(union_), nullptr,
+                                       nullptr, false, ICIS_NoInit);
+  union_field->setAccess(AS_public);
+  struct_->addDecl(union_field);
+
+  auto indirect_error = IndirectFieldDecl::Create(
+      ast, struct_, {}, &ast.Idents.get("error"), error_type, {});
+
+  
+  struct_->completeDefinition();
+
+  return CanQualType::CreateUnsafe(ast.getRecordType(struct_))
+      .getUnqualifiedType();
+}
+
 /// Arrange the argument and result information for an abstract value
 /// of a given function type.  This is the method which all of the
 /// above functions ultimately defer to.
@@ -847,13 +904,21 @@ const CGFunctionInfo &CodeGenTypes::arrangeLLVMFunctionInfo(
 
   // Lookup or create unique function info.
   llvm::FoldingSetNodeID ID;
+  bool isStaticExceptionSpecification =
+      (opts & FnInfoOpts::IsStaticExceptionSpecification) ==
+      FnInfoOpts::IsStaticExceptionSpecification;
   bool isInstanceMethod =
       (opts & FnInfoOpts::IsInstanceMethod) == FnInfoOpts::IsInstanceMethod;
   bool isChainCall =
       (opts & FnInfoOpts::IsChainCall) == FnInfoOpts::IsChainCall;
   bool isDelegateCall =
       (opts & FnInfoOpts::IsDelegateCall) == FnInfoOpts::IsDelegateCall;
-  CGFunctionInfo::Profile(ID, isInstanceMethod, isChainCall, isDelegateCall,
+
+  if (isStaticExceptionSpecification)
+    resultType = ::generateStaticExceptionSpecificationResultType(*this, resultType);
+
+  CGFunctionInfo::Profile(ID, isStaticExceptionSpecification, isInstanceMethod,
+                          isChainCall, isDelegateCall,
                           info, paramInfos, required, resultType, argTypes);
 
   void *insertPos = nullptr;
@@ -864,8 +929,10 @@ const CGFunctionInfo &CodeGenTypes::arrangeLLVMFunctionInfo(
   unsigned CC = ClangCallConvToLLVMCallConv(info.getCC());
 
   // Construct the function info.  We co-allocate the ArgInfos.
-  FI = CGFunctionInfo::create(CC, isInstanceMethod, isChainCall, isDelegateCall,
-                              info, paramInfos, resultType, argTypes, required);
+  FI = CGFunctionInfo::create(
+      CC, isStaticExceptionSpecification, isInstanceMethod, isChainCall,
+      isDelegateCall,
+      info, paramInfos, resultType, argTypes, required);
   FunctionInfos.InsertNode(FI, insertPos);
 
   bool inserted = FunctionsBeingProcessed.insert(FI).second;
@@ -901,7 +968,8 @@ const CGFunctionInfo &CodeGenTypes::arrangeLLVMFunctionInfo(
   return *FI;
 }
 
-CGFunctionInfo *CGFunctionInfo::create(unsigned llvmCC, bool instanceMethod,
+CGFunctionInfo *CGFunctionInfo::create(unsigned llvmCC, bool StaticExceptionSpecification, 
+                                       bool instanceMethod,
                                        bool chainCall, bool delegateCall,
                                        const FunctionType::ExtInfo &info,
                                        ArrayRef<ExtParameterInfo> paramInfos,
@@ -919,6 +987,7 @@ CGFunctionInfo *CGFunctionInfo::create(unsigned llvmCC, bool instanceMethod,
   FI->CallingConvention = llvmCC;
   FI->EffectiveCallingConvention = llvmCC;
   FI->ASTCallingConvention = info.getCC();
+  FI->InstanceMethod = StaticExceptionSpecification;
   FI->InstanceMethod = instanceMethod;
   FI->ChainCall = chainCall;
   FI->DelegateCall = delegateCall;

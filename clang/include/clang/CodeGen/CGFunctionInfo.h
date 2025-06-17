@@ -585,6 +585,10 @@ class CGFunctionInfo final
   LLVM_PREFERRED_TYPE(CallingConv)
   unsigned ASTCallingConvention : 6;
 
+  // Whether this is a static exception specification
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned StaticExceptionSpecification : 1;
+
   /// Whether this is an instance method.
   LLVM_PREFERRED_TYPE(bool)
   unsigned InstanceMethod : 1;
@@ -655,7 +659,8 @@ class CGFunctionInfo final
 
 public:
   static CGFunctionInfo *
-  create(unsigned llvmCC, bool instanceMethod, bool chainCall,
+  create(unsigned llvmCC, bool StaticExceptionSpecification,
+         bool instanceMethod, bool chainCall,
          bool delegateCall, const FunctionType::ExtInfo &extInfo,
          ArrayRef<ExtParameterInfo> paramInfos, CanQualType resultType,
          ArrayRef<CanQualType> argTypes, RequiredArgs required);
@@ -804,13 +809,15 @@ public:
     for (const auto &I : arguments())
       I.type.Profile(ID);
   }
-  static void Profile(llvm::FoldingSetNodeID &ID, bool InstanceMethod,
+  static void Profile(llvm::FoldingSetNodeID &ID, bool StaticExceptionSpecification, 
+                      bool InstanceMethod,
                       bool ChainCall, bool IsDelegateCall,
                       const FunctionType::ExtInfo &info,
                       ArrayRef<ExtParameterInfo> paramInfos,
                       RequiredArgs required, CanQualType resultType,
                       ArrayRef<CanQualType> argTypes) {
     ID.AddInteger(info.getCC());
+    ID.AddBoolean(StaticExceptionSpecification);
     ID.AddBoolean(InstanceMethod);
     ID.AddBoolean(ChainCall);
     ID.AddBoolean(IsDelegateCall);
