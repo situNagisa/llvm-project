@@ -81,6 +81,13 @@ inline CanThrowResult mergeCanThrow(CanThrowResult CT1, CanThrowResult CT2) {
   return CT1 > CT2 ? CT1 : CT2;
 }
 
+enum ExceptionSpecificationResult {
+  ESR_NoExcept,      ///< No exceptions can be thrown.
+  ESR_StaticExcept,  ///< Some static exceptions can be thrown.
+  ESR_DynamicExcept, ///< Some dynamic exceptions can be thrown.
+  ESR_Dependent,     ///< The exception specification is dependent.
+};
+
 } // end namespace clang
 
 #endif // LLVM_CLANG_BASIC_EXCEPTIONSPECIFICATIONTYPE_H

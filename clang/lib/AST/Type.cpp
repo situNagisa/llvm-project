@@ -3888,6 +3888,47 @@ CanThrowResult FunctionProtoType::canThrow() const {
   llvm_unreachable("unexpected exception specification kind");
 }
 
+ExceptionSpecificationResult
+FunctionProtoType::getExceptionSpecificationComputeResult() const {
+  switch (getExceptionSpecType()) {
+  case EST_Unparsed:
+  case EST_Unevaluated:
+    llvm_unreachable("should not call this with unresolved exception specs");
+
+  case EST_DynamicNone:
+  case EST_BasicNoexcept:
+  case EST_NoexceptTrue:
+  case EST_NoThrow:
+  case EST_ThrowsFalse:
+    return ESR_NoExcept;
+
+  case EST_ThrowsTrue:
+  case EST_BasicThrows:
+    return ESR_StaticExcept;
+
+  case EST_ThrowsDynamic:
+  case EST_None:
+  case EST_MSAny:
+  case EST_NoexceptFalse:
+    return ESR_DynamicExcept;
+
+  case EST_Dynamic:
+    // A dynamic exception specification is throwing unless every exception
+    // type is an (unexpanded) pack expansion type.
+    for (unsigned I = 0; I != getNumExceptions(); ++I)
+      if (!getExceptionType(I)->getAs<PackExpansionType>())
+        return ESR_DynamicExcept;
+    return ESR_Dependent;
+
+  case EST_Uninstantiated:
+  case EST_DependentNoexcept:
+  case EST_DependentThrows:
+    return ESR_Dependent;
+  }
+
+  llvm_unreachable("unexpected exception specification kind");
+}
+
 bool FunctionProtoType::isTemplateVariadic() const {
   for (unsigned ArgIdx = getNumParams(); ArgIdx; --ArgIdx)
     if (isa<PackExpansionType>(getParamType(ArgIdx - 1)))

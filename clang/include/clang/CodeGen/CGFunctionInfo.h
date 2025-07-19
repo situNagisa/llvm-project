@@ -699,6 +699,10 @@ public:
     return isVariadic() ? getRequiredArgs().getNumRequiredArgs() : arg_size();
   }
 
+  bool isStaticExceptionSpecification() const {
+    return StaticExceptionSpecification;
+  }
+
   bool isInstanceMethod() const { return InstanceMethod; }
 
   bool isChainCall() const { return ChainCall; }
@@ -789,6 +793,7 @@ public:
 
   void Profile(llvm::FoldingSetNodeID &ID) {
     ID.AddInteger(getASTCallingConvention());
+    ID.AddBoolean(StaticExceptionSpecification);
     ID.AddBoolean(InstanceMethod);
     ID.AddBoolean(ChainCall);
     ID.AddBoolean(DelegateCall);

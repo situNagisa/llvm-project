@@ -5571,6 +5571,8 @@ public:
     return ResultIfDependent ? canThrow() != CT_Can : canThrow() == CT_Cannot;
   }
 
+  ExceptionSpecificationResult getExceptionSpecificationComputeResult() const;
+
   /// Whether this function prototype is variadic.
   bool isVariadic() const { return FunctionTypeBits.Variadic; }
 
