@@ -8280,6 +8280,10 @@ def err_bad_dynamic_cast_not_polymorphic : Error<"%0 is not polymorphic">;
 // Other C++ expressions
 def err_need_header_before_typeid : Error<
   "you need to include <typeinfo> before using the 'typeid' operator">;
+def err_need_header_before_throws_specifier : Error<
+  "you need to include <stderror> before using the 'throws' specifier">;
+def err_need_header_before_throws_operator : Error<
+  "you need to include <stderror> before using the 'throws' operator">;
 def err_need_header_before_placement_new : Error<
   "no matching %0 function for non-allocating placement new expression; "
   "include <new>">;

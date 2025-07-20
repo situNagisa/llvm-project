@@ -6557,10 +6557,12 @@ public:
   ExprResult ActOnNoexceptSpec(Expr *NoexceptExpr,
                                ExceptionSpecificationType &EST);
 
+  /// Check the given throws-specifier, search for the type of std error.
+  void ActOnThrowsSpec(SourceLocation ThrowsLoc);
+
   /// Check the given throws-specifier, convert its expression, and compute
   /// the appropriate ExceptionSpecificationType.
-  ExprResult ActOnThrowsSpec( SourceLocation ExpressionLoc,
-                              Expr *ThrowsExpr,
+  ExprResult ActOnThrowsSpecExpr(Expr *ThrowsExpr,
                               ExceptionSpecificationType &EST);
 
   CanThrowResult canThrow(const Stmt *E);

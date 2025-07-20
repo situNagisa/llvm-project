@@ -114,38 +114,106 @@ ExprResult Sema::ActOnNoexceptSpec(Expr *NoexceptExpr,
   return Converted;
 }
 
-ExprResult Sema::ActOnThrowsSpec(SourceLocation ExpressionLoc,
-                                 Expr *ThrowsExpr,
-                                 ExceptionSpecificationType &EST) {
+void Sema::ActOnThrowsSpec(SourceLocation ThrowsLoc) {
+  if (!getStdNamespace()) {
+    Diag(ThrowsLoc, diag::err_need_header_before_throws_specifier);
+    return;
+  }
+  if (!Context.CXXStdErrorDecl) {
+    IdentifierInfo *TypeInfoII = &PP.getIdentifierTable().get("error");
+    LookupResult R(*this, TypeInfoII, SourceLocation(), LookupTagName);
+    LookupQualifiedName(R, getStdNamespace());
+    Context.CXXStdErrorDecl = R.getAsSingle<RecordDecl>();
+    if (!Context.CXXStdErrorDecl)
+      Diag(ThrowsLoc, diag::err_need_header_before_throws_specifier);
+  }
+}
+
+static QualType getCXXExceptT(Sema &S, Expr *ThrowsExpr) {
+  if (S.Context.CXXExceptTDecl) {
+    return S.Context.getTypeDeclType(S.Context.CXXExceptTDecl);
+  }
+  if (!S.getStdNamespace()) {
+    S.Diag(ThrowsExpr->getBeginLoc(),
+           diag::err_need_header_before_throws_specifier);
+    return {};
+  }
+  IdentifierInfo *TypeInfoII = &S.PP.getIdentifierTable().get("except_t");
+  LookupResult R(S, TypeInfoII, SourceLocation(), S.LookupTagName);
+  S.LookupQualifiedName(R, S.getStdNamespace());
+  S.Context.CXXExceptTDecl = R.getAsSingle<EnumDecl>();
+  if (!S.Context.CXXExceptTDecl) {
+    S.Diag(ThrowsExpr->getBeginLoc(),
+           diag::err_need_header_before_throws_specifier);
+    return {};
+  }
+  return S.Context.getTypeDeclType(S.Context.CXXExceptTDecl);
+}
+
+static DeclRefExpr *getStdExceptTEnumerator(Sema &S, QualType ExceptT,
+                                                   llvm::StringRef Name) {
+  NestedNameSpecifier *Spec =
+      NestedNameSpecifier::GlobalSpecifier(S.Context); // ::
+  Spec = NestedNameSpecifier::Create(S.Context, Spec,
+                                     S.getStdNamespace()); // std::
+  Spec = NestedNameSpecifier::Create(S.Context, Spec,
+                                     ExceptT.getTypePtr()); // except_t::
+  auto DummyLoc = NestedNameSpecifierLoc(Spec, nullptr);
+  EnumConstantDecl *NoExcept = nullptr;
+  for (auto *ECD : S.Context.CXXExceptTDecl->enumerators()) {
+    if (ECD->getName() == Name) {
+      NoExcept = ECD;
+      break;
+    }
+  }
+  assert(NoExcept != nullptr);
+  return DeclRefExpr::Create(S.Context, DummyLoc, SourceLocation{}, NoExcept,
+                          false,
+                          SourceLocation{}, ExceptT, VK_PRValue);
+}
+
+ExprResult Sema::ActOnThrowsSpecExpr(Expr *ThrowsExpr,
+                                     ExceptionSpecificationType &EST) {
 
   if (ThrowsExpr->isTypeDependent() ||
       ThrowsExpr->containsUnexpandedParameterPack()) {
     EST = EST_DependentThrows;
     return ThrowsExpr;
   }
+  auto ExceptTIsNull = false;
+  auto ExceptT = ::clang::getCXXExceptT(*this, ThrowsExpr);
+  if (ExceptT.isNull()) {
+    ExceptTIsNull = true;
+    ExceptT = Context.IntTy;
+  }
 
   llvm::APSInt Result;
   ExprResult Converted = CheckConvertedConstantExpression(
-      ThrowsExpr, Context.IntTy, Result, CCEKind::Throws);
+      ThrowsExpr, ExceptT, Result, CCEKind::Throws);
 
   if (Converted.isInvalid()) {
     EST = EST_ThrowsFalse;
-    // Fill in an expression of 'false' as a fixup.
-    auto *IntExpr = new (Context) IntegerLiteral(
-        Context, llvm::APSInt::get(0), Context.IntTy, ThrowsExpr->getBeginLoc());
     llvm::APSInt Value{2};
     Value = 0;
-    return ConstantExpr::Create(Context, IntExpr, APValue{Value});
+    if (ExceptTIsNull) {
+      auto IntExpr = new (Context) IntegerLiteral(
+          Context, llvm::APSInt::get(0), ExceptT, ThrowsExpr->getBeginLoc());
+      return ConstantExpr::Create(Context, IntExpr, APValue{Value});
+    }
+    // Fill in an expression of 'no_except' as a fixup.
+    auto NoExceptExpr = ::clang::getStdExceptTEnumerator(*this, ExceptT, "no_except");
+    return ConstantExpr::Create(Context, NoExceptExpr, APValue{Value});
   }
   if (Result < 0 || Result > 2)
   {
     EST = EST_ThrowsFalse;
-    Diag(ExpressionLoc, diag::err_throws_expression_value_out_of_range)
+    Diag(ThrowsExpr->getBeginLoc(),
+         diag::err_throws_expression_value_out_of_range)
         << Result.getExtValue();
     auto *IntExpr = new (Context) IntegerLiteral(
         Context,
-        llvm::APSInt(llvm::APInt(Context.getIntWidth(Context.IntTy), 0), false), 
-                                     Context.IntTy, ThrowsExpr->getBeginLoc());
+        llvm::APSInt(llvm::APInt(Context.getIntWidth(ExceptT), 0), false), 
+                                     ExceptT, ThrowsExpr->getBeginLoc());
     llvm::APSInt Value{2};
     Value = 0;
     return ConstantExpr::Create(Context, IntExpr, APValue{Value});

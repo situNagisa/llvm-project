@@ -4126,6 +4126,8 @@ ExceptionSpecificationType Parser::ParseThrowsSpecification(
   assert(Tok.is(tok::kw_throws) && "expected throws");
   ExceptionSpecificationType Result = EST_None;
 
+  Actions.ActOnThrowsSpec(Tok.getLocation());
+
   SourceLocation KeywordLoc = ConsumeToken();
 
   if (Tok.is(tok::l_paren)) {
@@ -4139,9 +4141,9 @@ ExceptionSpecificationType Parser::ParseThrowsSpecification(
 
     T.consumeClose();
     if (!StaticExceptionExpr.isInvalid()) {
-      StaticExceptionExpr =
-          Actions.ActOnThrowsSpec(T.getOpenLocation(), StaticExceptionExpr.get(), Result);
       SpecificationRange = SourceRange(KeywordLoc, T.getCloseLocation());
+      StaticExceptionExpr =
+          Actions.ActOnThrowsSpecExpr(StaticExceptionExpr.get(), Result);
     } else {
       Result = EST_BasicThrows;
     }

@@ -19521,8 +19521,8 @@ void Sema::checkExceptionSpecification(
   if (isComputedThrows(EST)) {
     assert((ThrowsExpr->isTypeDependent() ||
             ThrowsExpr->getType()->getCanonicalTypeUnqualified() ==
-            Context.IntTy) &&
-           "Parser should have made sure that the expression is int");
+            Context.getTypeDeclType(Context.CXXExceptTDecl)->getCanonicalTypeUnqualified()) &&
+           "Parser should have made sure that the expression is ::std::except_t");
     if (IsTopLevel && DiagnoseUnexpandedParameterPack(ThrowsExpr)) {
       ESI.Type = EST_BasicThrows;
       return;

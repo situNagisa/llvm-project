@@ -1168,6 +1168,9 @@ public:
 
   ExternCContextDecl *getExternCContextDecl() const;
 
+  RecordDecl *CXXStdErrorDecl = nullptr;
+  EnumDecl *CXXExceptTDecl = nullptr;
+
 #define BuiltinTemplate(BTName) BuiltinTemplateDecl *get##BTName##Decl() const;
 #include "clang/Basic/BuiltinTemplates.inc"
 
