@@ -1967,7 +1967,7 @@ protected:
 
     /// The type of exception specification this function has.
     LLVM_PREFERRED_TYPE(ExceptionSpecificationType)
-    unsigned ExceptionSpecType : 4;
+    unsigned ExceptionSpecType : 5;
 
     /// Whether this function has extended parameter information.
     LLVM_PREFERRED_TYPE(bool)
@@ -5500,6 +5500,8 @@ public:
       Result.Exceptions = exceptions();
     } else if (isComputedNoexcept(Result.Type)) {
       Result.NoexceptExpr = getNoexceptExpr();
+    } else if (isComputedThrows(Result.Type)) {
+      Result.ThrowsExpr = getThrowsExpr();
     } else if (Result.Type == EST_Uninstantiated) {
       Result.SourceDecl = getExceptionSpecDecl();
       Result.SourceTemplate = getExceptionSpecTemplate();
