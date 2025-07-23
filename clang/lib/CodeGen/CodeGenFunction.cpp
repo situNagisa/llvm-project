@@ -1427,6 +1427,10 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
       ResTy = CGM.getContext().VoidPtrTy;
     CGM.getCXXABI().buildThisParam(*this, Args);
   }
+  if (auto FT = FD->getType()->getAs<FunctionProtoType>();
+      FT->getExceptionSpecificationComputeResult() == ESR_StaticExcept) {
+    CGM.getCXXABI().buildStaticExceptionParam(*this, Args);
+  }
 
   // The base version of an inheriting constructor whose constructed base is a
   // virtual base is not passed any arguments (because it doesn't actually call

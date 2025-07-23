@@ -400,6 +400,9 @@ public:
   /// Build a parameter variable suitable for 'this'.
   void buildThisParam(CodeGenFunction &CGF, FunctionArgList &Params);
 
+
+  void buildStaticExceptionParam(CodeGenFunction &CGF, FunctionArgList &params);
+
   /// Insert any ABI-specific implicit parameters into the parameter list for a
   /// function.  This generally involves extra data for constructors and
   /// destructors.

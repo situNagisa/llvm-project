@@ -233,20 +233,36 @@ static void appendParameterTypes(
 using ExtParameterInfoList =
     SmallVector<FunctionProtoType::ExtParameterInfo, 16>;
 
+static void
+arrangeStaticExceptSpecificationPrefix(CodeGenTypes &CGT,
+                                       SmallVectorImpl<CanQualType> &prefix) {
+  auto &&context = CGT.getContext();
+  prefix.push_back(context.getPointerType(context.BoolTy));
+  prefix.push_back(context.getPointerType(context.getCanonicalType(
+      context.getTypeDeclType(context.CXXStdErrorDecl))));
+}
+
 /// Arrange the LLVM function layout for a value of the given function
 /// type, on top of any implicit parameters already stored.
 static const CGFunctionInfo &
-arrangeLLVMFunctionInfo(CodeGenTypes &CGT, bool instanceMethod,
+arrangeLLVMFunctionInfo(CodeGenTypes &CGT, bool instanceMethod, 
                         SmallVectorImpl<CanQualType> &prefix,
                         CanQual<FunctionProtoType> FTP) {
+  FnInfoOpts opts =
+      instanceMethod ? FnInfoOpts::IsInstanceMethod : FnInfoOpts::None;
+  assert(FTP.getTypePtr()->getExceptionSpecificationComputeResult() !=
+         ESR_Dependent);
+  if (FTP.getTypePtr()->getExceptionSpecificationComputeResult() ==
+      ESR_StaticExcept) {
+    opts = opts | FnInfoOpts::IsStaticExceptionSpecification;
+    ::arrangeStaticExceptSpecificationPrefix(CGT, prefix);
+  }
+
   ExtParameterInfoList paramInfos;
   RequiredArgs Required = RequiredArgs::forPrototypePlus(FTP, prefix.size());
   appendParameterTypes(CGT, prefix, paramInfos, FTP);
   CanQualType resultType = FTP->getReturnType().getUnqualifiedType();
-  FnInfoOpts opts =
-      instanceMethod ? FnInfoOpts::IsInstanceMethod : FnInfoOpts::None;
-  if (::isThrowsExceptionSpec(FTP->getTypePtr()->getExceptionSpecType()))
-    opts = opts | FnInfoOpts::IsStaticExceptionSpecification;
+  
   return CGT.arrangeLLVMFunctionInfo(resultType, opts, prefix,
                                      FTP->getExtInfo(), paramInfos, Required);
 }
@@ -835,62 +851,6 @@ void computeSPIRKernelABIInfo(CodeGenModule &CGM, CGFunctionInfo &FI);
 }
 } // namespace clang
 
-
-static auto
-generateStaticExceptionSpecificationResultType(CodeGenTypes &CGT,
-                                               CanQualType ResultType) {
-  auto &ast = CGT.getContext();
-  /// struct {
-  ///   bool flag;
-  ///   union {
-  ///     ::std::error error;
-  ///     T result;
-  ///   };
-  /// }
-  auto struct_ = CXXRecordDecl::Create(
-      ast, TagTypeKind::Struct, ast.getTranslationUnitDecl(), {}, {}, nullptr);
-  struct_->startDefinition();
-  struct_->setAccess(AS_public);
-  auto flag =
-      FieldDecl::Create(ast, struct_, {}, {}, &ast.Idents.get("flag"),
-                        ast.BoolTy, nullptr, nullptr, false, ICIS_NoInit);
-  flag->setAccess(AS_public);
-  struct_->addDecl(flag);
-
-  auto union_ =
-      CXXRecordDecl::Create(ast, TagTypeKind::Union, struct_, {}, {}, nullptr);
-  union_->startDefinition();
-  union_->setAccess(AS_public);
-  auto error_type = ast.VoidPtrTy;
-  auto error =
-      FieldDecl::Create(ast, union_, {}, {}, &ast.Idents.get("error"),
-                        error_type, nullptr, nullptr, false, ICIS_NoInit);
-  error->setAccess(AS_public);
-  union_->addDecl(error);
-  if (!ResultType->isVoidType()) {
-    auto result =
-        FieldDecl::Create(ast, union_, {}, {}, &ast.Idents.get("result"),
-                          ResultType, nullptr, nullptr, false, ICIS_NoInit);
-    result->setAccess(AS_public);
-    union_->addDecl(result);
-  }
-  union_->completeDefinition();
-  auto union_field = FieldDecl::Create(ast, struct_, {}, {}, nullptr,
-                                       ast.getRecordType(union_), nullptr,
-                                       nullptr, false, ICIS_NoInit);
-  union_field->setAccess(AS_public);
-  struct_->addDecl(union_field);
-
-  auto indirect_error = IndirectFieldDecl::Create(
-      ast, struct_, {}, &ast.Idents.get("error"), error_type, {});
-
-  
-  struct_->completeDefinition();
-
-  return CanQualType::CreateUnsafe(ast.getRecordType(struct_))
-      .getUnqualifiedType();
-}
-
 /// Arrange the argument and result information for an abstract value
 /// of a given function type.  This is the method which all of the
 /// above functions ultimately defer to.
@@ -913,9 +873,6 @@ const CGFunctionInfo &CodeGenTypes::arrangeLLVMFunctionInfo(
       (opts & FnInfoOpts::IsChainCall) == FnInfoOpts::IsChainCall;
   bool isDelegateCall =
       (opts & FnInfoOpts::IsDelegateCall) == FnInfoOpts::IsDelegateCall;
-
-  if (isStaticExceptionSpecification)
-    resultType = ::generateStaticExceptionSpecificationResultType(*this, resultType);
 
   CGFunctionInfo::Profile(ID, isStaticExceptionSpecification, isInstanceMethod,
                           isChainCall, isDelegateCall,

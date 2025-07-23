@@ -2061,6 +2061,9 @@ private:
   CharUnits CXXABIThisAlignment;
   CharUnits CXXThisAlignment;
 
+  ImplicitParamDecl *CXXABIFlagDecl = nullptr;
+  ImplicitParamDecl *CXXABIStdErrorDecl = nullptr;
+
   /// The value of 'this' to use when evaluating CXXDefaultInitExprs within
   /// this expression.
   Address CXXDefaultInitExprThis = Address::invalid();
