@@ -944,7 +944,7 @@ CGFunctionInfo *CGFunctionInfo::create(unsigned llvmCC, bool StaticExceptionSpec
   FI->CallingConvention = llvmCC;
   FI->EffectiveCallingConvention = llvmCC;
   FI->ASTCallingConvention = info.getCC();
-  FI->InstanceMethod = StaticExceptionSpecification;
+  FI->StaticExceptionSpecification = StaticExceptionSpecification;
   FI->InstanceMethod = instanceMethod;
   FI->ChainCall = chainCall;
   FI->DelegateCall = delegateCall;
