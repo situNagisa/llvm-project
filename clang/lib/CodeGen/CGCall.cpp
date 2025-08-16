@@ -444,6 +444,13 @@ CodeGenTypes::arrangeCXXStructorDeclaration(GlobalDecl GD) {
 
   CanQual<FunctionProtoType> FTP = GetFormalType(MD);
 
+  auto opt = FnInfoOpts::IsInstanceMethod;
+  if (FTP->getTypePtr()->getExceptionSpecificationComputeResult() ==
+      ESR_StaticExcept) {
+    opt = opt | FnInfoOpts::IsStaticExceptionSpecification;
+    ::arrangeStaticExceptSpecificationPrefix(*this, argTypes);
+  }
+
   // Add the formal parameters.
   if (PassParams)
     appendParameterTypes(*this, argTypes, paramInfos, FTP);
@@ -469,7 +476,7 @@ CodeGenTypes::arrangeCXXStructorDeclaration(GlobalDecl GD) {
                            : getCXXABI().hasMostDerivedReturn(GD)
                                ? CGM.getContext().VoidPtrTy
                                : Context.VoidTy;
-  return arrangeLLVMFunctionInfo(resultType, FnInfoOpts::IsInstanceMethod,
+  return arrangeLLVMFunctionInfo(resultType, opt,
                                  argTypes, extInfo, paramInfos, required);
 }
 
@@ -538,8 +545,12 @@ const CGFunctionInfo &CodeGenTypes::arrangeCXXConstructorCall(
     addExtParameterInfosForCall(ParamInfos, FPT.getTypePtr(), TotalPrefixArgs,
                                 ArgTypes.size());
   }
+  auto opt = FnInfoOpts::IsInstanceMethod;
+  if (FPT.getTypePtr()->getExceptionSpecificationComputeResult() ==
+      ESR_StaticExcept)
+    opt = opt | FnInfoOpts::IsStaticExceptionSpecification;
 
-  return arrangeLLVMFunctionInfo(ResultType, FnInfoOpts::IsInstanceMethod,
+  return arrangeLLVMFunctionInfo(ResultType, opt,
                                  ArgTypes, Info, ParamInfos, Required);
 }
 
@@ -684,6 +695,7 @@ arrangeFreeFunctionLikeCall(CodeGenTypes &CGT, CodeGenModule &CGM,
                             const CallArgList &args, const FunctionType *fnType,
                             unsigned numExtraRequiredArgs, bool chainCall) {
   assert(args.size() >= numExtraRequiredArgs);
+  FnInfoOpts opts = chainCall ? FnInfoOpts::IsChainCall : FnInfoOpts::None;
 
   ExtParameterInfoList paramInfos;
 
@@ -693,6 +705,11 @@ arrangeFreeFunctionLikeCall(CodeGenTypes &CGT, CodeGenModule &CGM,
   // If we have a variadic prototype, the required arguments are the
   // extra prefix plus the arguments in the prototype.
   if (const FunctionProtoType *proto = dyn_cast<FunctionProtoType>(fnType)) {
+    assert(proto->getExceptionSpecificationComputeResult() != ESR_Dependent);
+    if (proto->getExceptionSpecificationComputeResult() ==
+        ESR_StaticExcept) {
+      opts = opts | FnInfoOpts::IsStaticExceptionSpecification;
+    }
     if (proto->isVariadic())
       required = RequiredArgs::forPrototypePlus(proto, numExtraRequiredArgs);
 
@@ -712,7 +729,6 @@ arrangeFreeFunctionLikeCall(CodeGenTypes &CGT, CodeGenModule &CGM,
   CanQualTypeList argTypes;
   for (const auto &arg : args)
     argTypes.push_back(CGT.getContext().getCanonicalParamType(arg.Ty));
-  FnInfoOpts opts = chainCall ? FnInfoOpts::IsChainCall : FnInfoOpts::None;
   return CGT.arrangeLLVMFunctionInfo(GetReturnType(fnType->getReturnType()),
                                      opts, argTypes, fnType->getExtInfo(),
                                      paramInfos, required);
@@ -1877,7 +1893,7 @@ static void AddAttributesFromFunctionProtoType(ASTContext &Ctx,
     return;
 
   if (!isUnresolvedExceptionSpec(FPT->getExceptionSpecType()) &&
-      FPT->isNothrow())
+      FPT->getExceptionSpecificationComputeResult() != ESR_DynamicExcept)
     FuncAttrs.addAttribute(llvm::Attribute::NoUnwind);
 
   unsigned SMEBits = FPT->getAArch64SMEAttributes();
