@@ -584,7 +584,9 @@ void CodeGenFunction::EmitStartEHSpec(const Decl *D) {
     }
   } else if (Proto->canThrow() == CT_Cannot) {
     // noexcept functions are simple terminate scopes.
-    if (!getLangOpts().EHAsynch) // -EHa: HW exception still can occur
+    if (!getLangOpts().EHAsynch &&
+        Proto->getExceptionSpecificationComputeResult() !=
+            ESR_StaticExcept) // -EHa: HW exception still can occur
       EHStack.pushTerminate();
   }
 }
@@ -664,6 +666,7 @@ void CodeGenFunction::EmitEndEHSpec(const Decl *D) {
     EHStack.popFilter();
   } else if (Proto->canThrow() == CT_Cannot &&
               /* possible empty when under async exceptions */
+              /* and empty when use static exception specification */
              !EHStack.empty()) {
     EHStack.popTerminate();
   }
