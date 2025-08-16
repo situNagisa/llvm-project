@@ -898,7 +898,7 @@ llvm::BasicBlock *CodeGenFunction::getInvokeDestImpl() {
 
   const EHPersonality &Personality = EHPersonality::get(*this);
 
-  if (!CurFn->hasPersonalityFn())
+  if (!CurFn->hasPersonalityFn() && !Personality.usesHerbception())
     CurFn->setPersonalityFn(getOpaquePersonalityFn(CGM, Personality));
 
   if (Personality.usesFuncletPads()) {
@@ -1642,7 +1642,7 @@ llvm::BasicBlock *CodeGenFunction::getTerminateLandingPad() {
   // Tell the backend that this is a landing pad.
   const EHPersonality &Personality = EHPersonality::get(*this);
 
-  if (!CurFn->hasPersonalityFn())
+  if (!CurFn->hasPersonalityFn() && !Personality.usesHerbception())
     CurFn->setPersonalityFn(getOpaquePersonalityFn(CGM, Personality));
 
   llvm::LandingPadInst *LPadInst =
