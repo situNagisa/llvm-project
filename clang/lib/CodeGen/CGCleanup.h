@@ -15,6 +15,7 @@
 
 #include "EHScopeStack.h"
 
+#include "CGException.h"
 #include "Address.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
@@ -165,6 +166,8 @@ class EHCatchScope : public EHScope {
   // But that's only standard in C99, not C++, so we have to do
   // annoying pointer arithmetic instead.
 
+  EHStaticExceptionContext SESContext{};
+
 public:
   struct Handler {
     /// A type info value, or null (C++ null, not an LLVM null pointer)
@@ -233,6 +236,9 @@ public:
     for (unsigned I = 0, N = getNumHandlers(); I != N; ++I)
       delete getHandler(I).Block;
   }
+
+  auto &&getSESContext() { return SESContext; }
+  auto &&getSESContext() const { return SESContext; }
 
   typedef const Handler *iterator;
   iterator begin() const { return getHandlers(); }
@@ -549,10 +555,16 @@ public:
 /// An exceptions scope which calls std::terminate if any exception
 /// reaches it.
 class EHTerminateScope : public EHScope {
+
+  EHStaticExceptionContext SESContext{};
+
 public:
   EHTerminateScope(EHScopeStack::stable_iterator enclosingEHScope)
     : EHScope(Terminate, enclosingEHScope) {}
   static size_t getSize() { return sizeof(EHTerminateScope); }
+
+  auto &&getSESContext() { return SESContext; }
+  auto &&getSESContext() const { return SESContext; }
 
   static bool classof(const EHScope *scope) {
     return scope->getKind() == Terminate;

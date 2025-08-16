@@ -1253,6 +1253,13 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
       AutoreleaseResult = true;
   }
 
+  if (CurFnInfo->isStaticExceptionSpecification()) {
+    SESABIValueContext.CXXFlag = makeNaturalAddressForPointer(
+        getCXXABIFlagArgument(), getCXXABIFlagType());
+    SESABIValueContext.CXXStdError = makeNaturalAddressForPointer(
+        getCXXABIStdErrorArgument(), getCXXABIStdErrorType());
+  }
+
   EmitStartEHSpec(CurCodeDecl);
 
   PrologueCleanupDepth = EHStack.stable_begin();

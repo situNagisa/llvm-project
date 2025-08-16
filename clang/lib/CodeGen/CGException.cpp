@@ -390,6 +390,50 @@ namespace {
   };
 } // end anonymous namespace
 
+void EHStaticExceptionContext::EmitFalse(CodeGenFunction &CGF) const {
+  assert(CXXFlag.isValid());
+  auto Type = CGF.getCXXABIFlagType();
+  auto LLVMType = CGF.ConvertTypeForMem(Type);
+  CGF.EmitStoreOfScalar(::llvm::ConstantInt::get(LLVMType, 0),
+                        CGF.MakeAddrLValue(CXXFlag, Type),
+                        /*isInit*/ false);
+}
+void EHStaticExceptionContext::EmitTrue(CodeGenFunction &CGF) const {
+  assert(CXXFlag.isValid());
+  auto Type = CGF.getCXXABIFlagType();
+  auto LLVMType = CGF.ConvertTypeForMem(Type);
+  CGF.EmitStoreOfScalar(::llvm::ConstantInt::get(LLVMType, 1),
+                        CGF.MakeAddrLValue(CXXFlag, Type),
+                        /*isInit*/ false);
+}
+
+void EHStaticExceptionContext::EmitStdError(CodeGenFunction &CGF,
+                                            Expr const *E) const {
+  assert(CXXStdError.isValid());
+  assert(E != nullptr);
+
+  switch (CGF.getEvaluationKind(E->getType())) {
+  case TEK_Scalar: {
+    CGF.EmitStoreOfScalar(CGF.EmitScalarExpr(E),
+                          CGF.MakeAddrLValue(CXXStdError, E->getType()),
+                          /*isInit*/ true);
+    break;
+  }
+  case TEK_Complex:
+    CGF.EmitComplexExprIntoLValue(E,
+                                  CGF.MakeAddrLValue(CXXStdError, E->getType()),
+                                  /*isInit*/ true);
+    break;
+  case TEK_Aggregate:
+    CGF.EmitAggExpr(
+        E, AggValueSlot::forAddr(
+               CXXStdError, Qualifiers(), AggValueSlot::IsDestructed,
+               AggValueSlot::DoesNotNeedGCBarriers, AggValueSlot::IsNotAliased,
+               CGF.getOverlapForReturnValue()));
+    break;
+  }
+}
+
 // Emits an exception expression into the given location.  This
 // differs from EmitAnyExprToMem only in that, if a final copy-ctor
 // call is required, an exception within that copy ctor causes
@@ -754,6 +798,52 @@ CodeGenFunction::getFuncletEHDispatchBlock(EHScopeStack::stable_iterator SI) {
   }
   EHS.setCachedEHDispatchBlock(DispatchBlock);
   return DispatchBlock;
+}
+
+EHStaticExceptionContext& CodeGenFunction::getCurrentSESContext() {
+  for (auto si = EHStack.getInnermostEHScope(); si != EHStack.stable_end();) {
+    // Skip lifetime markers.
+    auto scope = EHStack.find(si); 
+    if (auto &&catch_scope = dyn_cast<EHCatchScope>(&*scope))
+      return catch_scope->getSESContext();
+    if (auto &&terminate_scope = dyn_cast<EHTerminateScope>(&*scope))
+      return terminate_scope->getSESContext();
+    si = scope->getEnclosingEHScope();
+  }
+  // assert(CurFnInfo->isStaticExceptionSpecification());
+  // assert(SESABIValueContext.isValid() &&
+  //        "SESABIValueContext must be initialized for static exception "
+  //        "specifications");
+  return SESABIValueContext;
+}
+EHStaticExceptionContext const &CodeGenFunction::getCurrentSESContext() const {
+  for (auto si = EHStack.getInnermostEHScope(); si != EHStack.stable_end();) {
+    // Skip lifetime markers.
+    auto scope = EHStack.find(si);
+    if (auto &&catch_scope = dyn_cast<EHCatchScope>(&*scope))
+      return catch_scope->getSESContext();
+    if (auto &&terminate_scope = dyn_cast<EHTerminateScope>(&*scope))
+      return terminate_scope->getSESContext();
+    si = scope->getEnclosingEHScope();
+  }
+  // assert(CurFnInfo->isStaticExceptionSpecification());
+  // assert(SESABIValueContext.isValid() &&
+  //        "SESABIValueContext must be initialized for static exception "
+  //        "specifications");
+  return SESABIValueContext;
+}
+
+Address CodeGenFunction::createSESFlag() {
+  auto Type = getCXXABIFlagType();
+  auto LLVMType = ConvertTypeForMem(Type);
+  auto Value = CreateTempAlloca(LLVMType, "has_error");
+  return makeNaturalAddressForPointer(Value, Type);
+}
+Address CodeGenFunction::createSESStdError() {
+  auto Type = getCXXABIStdErrorType();
+  auto LLVMType = ConvertTypeForMem(Type);
+  auto Value = CreateTempAlloca(LLVMType, "std_error");
+  return makeNaturalAddressForPointer(Value, Type);
 }
 
 /// Check whether this is a non-EH scope, i.e. a scope which doesn't

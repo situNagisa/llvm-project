@@ -13,6 +13,7 @@
 #ifndef LLVM_CLANG_LIB_CODEGEN_CODEGENFUNCTION_H
 #define LLVM_CLANG_LIB_CODEGEN_CODEGENFUNCTION_H
 
+#include "CGException.h"
 #include "CGBuilder.h"
 #include "CGLoopInfo.h"
 #include "CGValue.h"
@@ -1308,6 +1309,21 @@ public:
   llvm::BasicBlock *
   getFuncletEHDispatchBlock(EHScopeStack::stable_iterator scope);
 
+  EHStaticExceptionContext& getCurrentSESContext();
+  EHStaticExceptionContext const& getCurrentSESContext() const;
+
+  auto isABISESContext(EHStaticExceptionContext const &Context) const {
+    return &Context == &SESABIValueContext;
+  }
+
+  auto getCXXABIStdErrorType() const {
+    return getContext().getTypeDeclType(getContext().CXXStdErrorDecl);
+  }
+  auto getCXXABIFlagType() const { return getContext().BoolTy; }
+
+  Address createSESFlag();
+  Address createSESStdError();
+
   /// An object to manage conditionally-evaluated expressions.
   class ConditionalEvaluation {
     llvm::BasicBlock *StartBB;
@@ -2052,6 +2068,32 @@ public:
     };
   };
 
+  llvm::Argument *getCXXABIThisArgument() const {
+    assert(CurFnInfo->isInstanceMethod());
+    auto AI = CurFn->arg_begin();
+    if (CurFnInfo->getReturnInfo().isIndirect() &&
+        !CurFnInfo->getReturnInfo().isSRetAfterThis())
+      ++AI;
+    return AI;
+  }
+  llvm::Argument *getSretArgument() const {
+    assert(CurFnInfo->getReturnInfo().isIndirect());
+    auto AI = CurFn->arg_begin();
+    if (CurFnInfo->isInstanceMethod() && CurFnInfo->getReturnInfo()
+            .isSRetAfterThis())
+      ++AI;
+    return AI;
+  }
+  llvm::Argument *getCXXABIFlagArgument() const {
+    assert(CurFnInfo->isStaticExceptionSpecification());
+    return CurFn->arg_begin() + CurFnInfo->getReturnInfo().isIndirect() +
+           CurFnInfo->isInstanceMethod();
+  }
+  llvm::Argument *getCXXABIStdErrorArgument() const {
+    assert(CurFnInfo->isStaticExceptionSpecification());
+    return getCXXABIFlagArgument() + 1;
+  }
+
 private:
   /// CXXThisDecl - When generating code for a C++ member function,
   /// this will hold the implicit 'this' declaration.
@@ -2061,6 +2103,7 @@ private:
   CharUnits CXXABIThisAlignment;
   CharUnits CXXThisAlignment;
 
+  EHStaticExceptionContext SESABIValueContext{};
   ImplicitParamDecl *CXXABIFlagDecl = nullptr;
   ImplicitParamDecl *CXXABIStdErrorDecl = nullptr;
 
