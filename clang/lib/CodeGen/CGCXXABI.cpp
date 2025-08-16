@@ -153,21 +153,19 @@ void CGCXXABI::buildStaticExceptionParam(CodeGenFunction &CGF, FunctionArgList &
 
   // FIXME: I'm not entirely sure I like using a fake decl just for code
   // generation. Maybe we can come up with a better way?
-  auto *FlagDecl = ImplicitParamDecl::Create(
+  CGF.CXXABIFlagDecl = ImplicitParamDecl::Create(
       Context, nullptr, FD->getLocation(),
       &Context.Idents.get("__clang_static_exception_flag"),
-      Context.getPointerType(Context.BoolTy),
+      Context.getPointerType(CGF.getCXXABIFlagType()),
       ImplicitParamKind::Other);
-  auto *StdErrorDecl = ImplicitParamDecl::Create(
+  CGF.CXXABIStdErrorDecl = ImplicitParamDecl::Create(
       Context, nullptr, FD->getLocation(),
       &Context.Idents.get("__clang_static_exception_std_error"),
-      Context.getPointerType(Context.getTypeDeclType(Context.CXXStdErrorDecl)),
+      Context.getPointerType(CGF.getCXXABIStdErrorType()),
       ImplicitParamKind::Other);
 
-  params.push_back(FlagDecl);
-  CGF.CXXABIFlagDecl = FlagDecl;
-  params.push_back(StdErrorDecl);
-  CGF.CXXABIStdErrorDecl = StdErrorDecl;
+  params.push_back(CGF.CXXABIFlagDecl);
+  params.push_back(CGF.CXXABIStdErrorDecl);
 }
 
 llvm::Value *CGCXXABI::loadIncomingCXXThis(CodeGenFunction &CGF) {
