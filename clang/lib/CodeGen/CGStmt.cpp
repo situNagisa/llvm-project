@@ -1710,6 +1710,10 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
       break;
     }
   }
+  if (CurFnInfo->isStaticExceptionSpecification()) {
+    assert(SESABIValueContext.isValid());
+    SESABIValueContext.EmitFalse(*this);
+  }
 
   ++NumReturnExprs;
   if (!RV || RV->isEvaluatable(getContext()))

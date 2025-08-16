@@ -3113,8 +3113,14 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
   // a more general mechanism for this that didn't require synthesized
   // return statements.
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(CurCodeDecl)) {
+    QualType RetTy = FD->getReturnType().getUnqualifiedType();
+    if (RetTy->isVoidType()) {
+      if (CurFnInfo->isStaticExceptionSpecification()) {
+        assert(SESABIValueContext.isValid());
+        SESABIValueContext.EmitFalse(*this);
+      }
+    }
     if (FD->hasImplicitReturnZero()) {
-      QualType RetTy = FD->getReturnType().getUnqualifiedType();
       llvm::Type *LLVMTy = CGM.getTypes().ConvertType(RetTy);
       llvm::Constant *Zero = llvm::Constant::getNullValue(LLVMTy);
       Builder.CreateStore(Zero, ReturnValue);
@@ -5925,6 +5931,17 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   llvm::CallBase *CI;
   if (!InvokeDest) {
     CI = Builder.CreateCall(IRFuncTy, CalleePtr, IRCallArgs, BundleList);
+    if (CallInfo.isStaticExceptionSpecification()) {
+      auto &&SESContext = getCurrentSESContext();
+      assert(SESContext.isValid() &&
+             "SES context must have CXXFlag and CXXStdError set");
+      auto Cont = createBasicBlock("ses_call.cont");
+      Builder.CreateCondBr(
+          Builder.CreateTrunc(Builder.CreateLoad(SESContext.CXXFlag),
+                              Builder.getInt1Ty()),
+          getSESCallDest(), Cont);
+      EmitBlock(Cont);
+    }
   } else {
     llvm::BasicBlock *Cont = createBasicBlock("invoke.cont");
     CI = Builder.CreateInvoke(IRFuncTy, CalleePtr, Cont, InvokeDest, IRCallArgs,

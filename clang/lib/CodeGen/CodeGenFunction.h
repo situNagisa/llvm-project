@@ -1304,7 +1304,7 @@ public:
   /// themselves).
   void popCatchScope();
 
-  llvm::BasicBlock *getEHResumeBlock(bool isCleanup);
+  llvm::BasicBlock *getEHResumeBlock(bool isCleanup, bool isThrew = true);
   llvm::BasicBlock *getEHDispatchBlock(EHScopeStack::stable_iterator scope);
   llvm::BasicBlock *
   getFuncletEHDispatchBlock(EHScopeStack::stable_iterator scope);
@@ -2224,6 +2224,14 @@ public:
       return nullptr;
     return getInvokeDestImpl();
   }
+
+  llvm::BasicBlock *getSESCallDest() {
+    auto R = getInvokeDest();
+    if (R)
+      return R;
+    return getSESResumeBlock();
+  }
+  llvm::BasicBlock *getSESResumeBlock();
 
   bool currentFunctionUsesSEHTry() const { return !!CurSEHParent; }
 
