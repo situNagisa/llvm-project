@@ -770,7 +770,7 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
   DidCallStackSave = false;
   CurCodeDecl = D;
   const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D);
-  if (FD && FD->usesSEHTry())
+  if (FD && FD->usesSEHTry() && !FnInfo.isStaticExceptionSpecification())
     CurSEHParent = GD;
   CurFuncDecl = (D ? D->getNonClosureContext() : nullptr);
   FnRetTy = RetTy;
