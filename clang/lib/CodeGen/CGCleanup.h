@@ -698,11 +698,17 @@ struct EHPersonality {
   static const EHPersonality GNU_Wasm_CPlusPlus;
   static const EHPersonality XL_CPlusPlus;
   static const EHPersonality ZOS_CPlusPlus;
+  static const EHPersonality Herbception_C;
+  static const EHPersonality Herbception_CPlusPlus;
 
   /// Does this personality use landingpads or the family of pad instructions
   /// designed to form funclets?
   bool usesFuncletPads() const {
     return isMSVCPersonality() || isWasmPersonality();
+  }
+
+  bool usesHerbception() const {
+    return this == &Herbception_C || this == &Herbception_CPlusPlus;
   }
 
   bool isMSVCPersonality() const {

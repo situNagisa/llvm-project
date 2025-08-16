@@ -129,7 +129,8 @@ const EHPersonality EHPersonality::XL_CPlusPlus = {"__xlcxx_personality_v1",
                                                    nullptr};
 const EHPersonality EHPersonality::ZOS_CPlusPlus = {"__zos_cxx_personality_v2",
                                                     nullptr};
-
+const EHPersonality EHPersonality::Herbception_C = {nullptr, nullptr};
+const EHPersonality EHPersonality::Herbception_CPlusPlus = {nullptr, nullptr};
 static const EHPersonality &getCPersonality(const TargetInfo &Target,
                                             const LangOptions &L) {
   const llvm::Triple &T = Target.getTriple();
@@ -252,6 +253,11 @@ const EHPersonality &EHPersonality::get(CodeGenModule &CGM,
 }
 
 const EHPersonality &EHPersonality::get(CodeGenFunction &CGF) {
+  if (CGF.CurFnInfo->isStaticExceptionSpecification()) {
+    return CGF.CGM.getLangOpts().CPlusPlus
+               ? EHPersonality::Herbception_CPlusPlus
+               : EHPersonality::Herbception_C;
+  }
   const auto *FD = CGF.CurCodeDecl;
   // For outlined finallys and filters, use the SEH personality in case they
   // contain more SEH. This mostly only affects finallys. Filters could
