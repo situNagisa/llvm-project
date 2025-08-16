@@ -4542,6 +4542,8 @@ public:
   //                         Scalar Expression Emission
   //===--------------------------------------------------------------------===//
 
+  void EmitSESCallArgList(CallArgList &Args);
+
   /// EmitCall - Generate a call of the given function, expecting the given
   /// result type, and using the given argument list which specifies both the
   /// LLVM arguments and the types they were derived from.

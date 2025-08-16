@@ -2145,6 +2145,12 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   // Push the this ptr.
   Args.add(RValue::get(ThisPtr), D->getThisType());
 
+  if (auto ProtoFnType = D->getType()->castAs<FunctionProtoType>();
+      ProtoFnType && ProtoFnType->getExceptionSpecificationComputeResult() ==
+                         ESR_StaticExcept) {
+    EmitSESCallArgList(Args);
+  }
+
   // If this is a trivial constructor, emit a memcpy now before we lose
   // the alignment information on the argument.
   // FIXME: It would be better to preserve alignment information into CallArg.

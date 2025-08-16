@@ -6267,6 +6267,19 @@ LValue CodeGenFunction::EmitStmtExprLValue(const StmtExpr *E) {
                         AlignmentSource::Decl);
 }
 
+void CodeGenFunction::EmitSESCallArgList(CallArgList &Args) {
+  auto&& SESContext = getCurrentSESContext();
+  if (!SESContext.CXXFlag.isValid())
+      SESContext.CXXFlag = createSESFlag();
+  if (!SESContext.CXXStdError.isValid())
+    SESContext.CXXStdError = createSESStdError();
+
+  Args.add(RValue::get(SESContext.CXXFlag.getBasePointer()),
+           getContext().getPointerType(getCXXABIFlagType()));
+  Args.add(RValue::get(SESContext.CXXStdError.getBasePointer()),
+           getContext().getPointerType(getCXXABIStdErrorType()));
+}
+
 RValue CodeGenFunction::EmitCall(QualType CalleeType,
                                  const CGCallee &OrigCallee, const CallExpr *E,
                                  ReturnValueSlot ReturnValue,
@@ -6414,6 +6427,12 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType,
   CallArgList Args;
   if (Chain)
     Args.add(RValue::get(Chain), CGM.getContext().VoidPtrTy);
+
+  if (auto ProtoFnType = dyn_cast<FunctionProtoType>(PointeeType);
+      ProtoFnType && ProtoFnType->getExceptionSpecificationComputeResult() ==
+                         ESR_StaticExcept) {
+    EmitSESCallArgList(Args);
+  }
 
   // C++17 requires that we evaluate arguments to a call using assignment syntax
   // right-to-left, and that we evaluate arguments to certain other operators
